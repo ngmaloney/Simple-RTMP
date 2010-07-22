@@ -1,0 +1,231 @@
+<?php
+
+
+//Include Dependencies
+require_once ( dirname(__FILE__) . '/simple_rtmp.node.inc');
+
+//Define Constants
+define("SIMPLE_RTMP_DIR", file_directory_path() . '/simple_rtmp');
+
+/**
+ * Implementation of hook_help() 
+**/
+function simple_rtmp_help($section) {
+  $output = "";
+  switch($section) {
+    case 'admin/help#simple_rtmp':
+      $output = '<p>'. t('Simple RTMP allows for easy creation of RTMP video nodes.') .'</p>';
+    break;
+    case 'admin/content/simple_rtmp':
+      $output = '<p>'. t('Simple RTMP allows for easy creation of RTMP video nodes.') .'</p>';
+    break;
+  }
+  return $output;
+}
+
+/**
+ * Implementation of hook_perm()
+**/
+function simple_rtmp_perm() {
+  return array(
+    'create simple_rtmp content',
+    'edit simple_rtmp content',
+    'edit own simple_rtmp content',
+    'access simple_rtmp content',
+  );
+}
+
+/**
+ * Implementation of hook_menu()
+**/
+function simple_rtmp_menu() {
+  
+}
+
+/**
+ * Implementation of hook_access()
+**/
+function simple_rtmp_access($op, $node, $account) {
+  switch($op) {
+    case 'create':
+      if(user_access('create simple_rtmp content',$account)) {
+        return TRUE;
+      }
+      break;
+    case 'update':
+    case 'delete':
+      if(user_access('edit simple_rtmp content',$account) || (user_access('edit own simple_rtmp content',$account) && ($account->uid == $node->uid))) {
+        return TRUE;
+      }
+      break;      
+  }
+}
+
+/** 
+ * Implementation of hook_preprocess_page()
+**/
+function simple_rtmp_preprocess_node(&$variables) {
+  
+  if (isset($variables['node']) && (arg(2) === NULL)) {
+    // If the content type of that one node is 'CONTENT_TYPE_NAME'.
+    if ($variables['node']->type == 'simple_rtmp') {
+      $modulepath = drupal_get_path('module', 'simple_rtmp');
+      //Add JS using custom hook. Doing it like this so as to not cause conflics with other modules that may already be adding these scripts
+      simple_rtmp_add_js($modulepath . '/js/swfobject.js');
+      simple_rtmp_add_js($modulepath . '/js/video.js');
+      simple_rtmp_add_js($modulepath . '/js/jquery.thickbox.js');
+      //Add js video
+      //$params = _simple_rtmp_get_js_params($node); //Creates JS object of node video params;
+      $js = _simple_rtmp_js_factory($variables['node']);
+      //var_dump($js);
+      drupal_add_js($js,'inline','footer');
+    }
+  }
+}
+
+/** 
+ * Helper function for creating the simple_rtmp js from a node
+**/
+function _simple_rtmp_js_factory($node) {
+  $container = null;
+  $js = null;
+  $modulepath = drupal_get_path('module', 'simple_rtmp');
+  $plist_file = null;
+  $rtmp_settings = null;
+  $stream = null;
+  $stream_type = null;
+  
+  //TODO Add exception handeling
+  
+  $container = "container_" . $node->nid;
+  
+  if ($node->stream_type == 1) {
+    $stream_type = 'rtmp';
+    $stream = $node->rtmp_url;
+  }
+  elseif ($node->stream_type == 2) {
+    $stream_type = 'playlist';
+    //Get playlist file path from db
+    $plist_file = _simple_rtmp_get_file_by_fid($node->playlist_file);
+    if($plist_file) {
+      $stream = "/$plist_file->filepath";
+    }
+  }
+  
+  //Define params
+  $params = array(
+    'player_path' => "/$modulepath" . "/mediaplayer.swf",
+    'video_width' => $node->video_width,
+    'video_height' => $node->video_height,
+    'autostart' => $node->video_autoplay,
+    'stream_type' => $stream_type,
+    'playlist_size' => $node->playlist_size,
+    'playlist_orientation' => $node->playlist_orientation,
+  );
+  
+  $js = "var dparams = " . drupal_to_js($params) . "\n";
+  $js .= "var video$node->nid = simpleRtmpVideo('$container', '$stream', dparams);";
+  return $js;
+}
+
+
+/**
+ * Implementation of hook_theme_registry_alter
+ *
+ * This hook adds this module to the theme registry
+ *
+ * Example found at http://hddigitalworks.com/zh-hans/provide-pattern-theme-templates-from-a-module
+**/
+function simple_rtmp_theme_registry_alter(&$theme_registry) {
+  $modulepath = drupal_get_path('module', 'simple_rtmp');
+  $theme_registry_copy = $theme_registry;       // munge on a copy
+  _theme_process_registry($theme_registry_copy, 'phptemplate', 'theme_engine', 'simple_rtmp', $modulepath);
+  $theme_registry += array_diff_key($theme_registry_copy, $theme_registry);
+  //var_dump($theme_registry);
+  $hooks = array('node');
+  foreach ($hooks as $h) {
+    _simple_rtmp_insert_after_first_element($theme_registry[$h]['theme paths'], $modulepath);
+  }
+}
+
+function _simple_rtmp_insert_after_first_element(&$a, $element) {
+  $first_element = array_shift($a);
+  array_unshift($a, $first_element, $element);
+}
+
+
+/** 
+ * Function to fetch a simple_rtmp by nid
+ * @param int $nid Node ID
+ * @return object simple_rtmp object
+**/
+function _simple_rtmp_get_by_nid($nid) {
+  //Ghetto hack using node_load hook!
+  $node = new stdClass();
+  $node->nid = $nid;
+  return simple_rtmp_load($node);
+}
+
+/**
+ * Function to fetch a file by a fid
+ * Could not locate in API docs
+ * @param int $fid File ID
+ * @return object file object
+**/
+function _simple_rtmp_get_file_by_fid($fid) {
+  return db_fetch_object(db_query('SELECT * FROM {files} WHERE fid = %d', $fid));
+}
+
+/**
+ * Function to delete a file by fid
+ * Standard file_delete hook doesn't remove from files table
+ * @param int $fid of file
+ * @return boolean status of delete
+**/
+function _simple_rtmp_delete_file($fid) {
+  $file = _simple_rtmp_get_file_by_fid($fid);
+  if($file) {
+    file_delete($file->filepath);
+    db_query('DELETE FROM {files} WHERE fid = %d', $fid);
+    return true;
+  }
+  else {
+    return false;
+  }
+}
+
+/**
+ * Helper function to return a link of a file based on the fid
+ * @param int $fid file ID
+ * @param str $class of html link element
+ * @return string HTML containing file link
+**/
+function _simple_rtmp_get_file_link($fid, $class) {
+  $file = _simple_rtmp_get_file_by_fid($fid);
+  $attrs = null;
+  
+  if(!$file) {
+    return "";
+  }
+  if($class) {
+    $attrs = array('attributes' => array('class' => $class));
+  }
+  $output = l($file->filename, file_create_url($file->filepath), $attrs);
+  return $output;
+}
+
+/**
+ * Helper function that is similar to drupal_add_js BUT... searches through the js variables and will only add the 
+ * specified script if a file of the same name isn't in the array
+ * @param string $script path to js to add
+**/
+function simple_rtmp_add_js($script) {
+  $scripts = "";
+  $fArray = explode("/",$script);
+  $fName = $fArray[count($fArray) - 1];
+  drupal_add_js('var simple_rtmp = true;','inline'); //Hack so drupal_get_js works from within this hook
+  $scripts = drupal_get_js();
+  if(!strpos($scripts,$fName)) {
+   drupal_add_js($script);
+  }
+}

@@ -1,0 +1,134 @@
+<?php
+
+/**
+ * Implementation of hook_schema()
+**/
+function simple_rtmp_schema() {
+  $schema['simple_rtmp'] = array(
+    'fields' => array(
+      'nid' => array(
+        'description' => t('The primary identifier for a node.'),
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'vid' => array(
+        'description' => t('The current {node_revisions}.vid version identifier.'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),      
+      'stream_type' => array(
+        'description' => t('The RTMP stream type.'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'rtmp_url' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'description' => 'URL of RTMP.',  
+      ),
+      'playlist_file' => array(
+        'description' => t('The playlist xml file id.'),
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+        'default' => '',
+      ),
+      'icon_file' => array(
+        'description' => t('The video icon file.'),
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+        'default' => '',
+      ),
+      'video_width' => array(
+        'description' => t('Video Width.'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'video_height' => array(
+        'description' => t('Video Height.'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      //Any Additional params added here...
+      'video_autoplay' => array(
+        'description' => t('Boolean for auto play.'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'playlist_size' => array(
+        'description' => t('Size of player playlist'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,        
+      ),
+      'playlist_orientation' => array(
+        'description' => t('Video playlist orientation'),
+        'type' => 'varchar',
+        'length' => 10,
+        'not null' => FALSE,
+        'default' => '',
+      ),      
+      
+    ),//end fields
+    'primary key' => array('vid'),
+      'unique keys' => array(
+           'vid' => array('vid')),
+      'indexes' => array(
+           'nid' => array('nid')),
+  );
+  return $schema;
+}
+
+/** 
+ * Add new positioning options for playlist
+**/
+function simple_rtmp_update_6100() {
+  $ret = array();
+  $playlist_size = array(
+    'description' => t('Size of player playlist'),
+    'type' => 'int',
+    'unsigned' => TRUE,
+    'not null' => TRUE,
+    'default' => 0,        
+  );
+  
+  $playlist_orientation = array(
+    'description' => t('Video playlist orientation'),
+    'type' => 'varchar',
+    'length' => 10,
+    'not null' => FALSE,
+    'default' => '',
+  );
+  
+  db_add_field($ret, 'simple_rtmp', 'playlist_size', $playlist_size);
+  db_add_field($ret, 'simple_rtmp', 'playlist_orientation', $playlist_orientation);
+  
+  return $ret;
+}
+
+/**
+ * Implementation of hook_install()
+**/
+function simple_rtmp_install() {
+  drupal_install_schema('simple_rtmp');
+}
+
+/**
+ * Implementation of hook_uninstall()
+**/
+function simple_rtmp_uninstall() {
+  drupal_uninstall_schema('simple_rtmp');
+}

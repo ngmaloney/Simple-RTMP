@@ -1,0 +1,5 @@
+; $Id$
+name = Simple RTMP
+description = Creates a simple rtmp node type used for playing RTMP streams
+core = 6.x
+package = Bentley
